@@ -1,0 +1,183 @@
+---
+title: "PERMANOVA"
+output: pdf_document
+---
+
+
+#### 1. Read in data
+
+```{R include = FALSE}
+library(knitr)
+library(kableExtra)
+library(microbiome)
+library(phyloseq)
+library(ggplot2)
+library(gplots)
+library(dplyr)
+library(vegan)
+
+setwd('/Users/yaolanqiu/Desktop/NYU/rotation/Rotation1/Generate_microbiome_compositional_data')
+load(file = 'mice.data.20181031.RData') #phy.genus: a phyloseq object
+```
+
+* Week = 13
+
+* Tow groups: 32 in PAT group and 36 in Control group
+
+```{R}
+ind = (sample_data(phy.genus)$Week==13 & 
+         (sample_data(phy.genus)$Treatment != 'STAT'))
+pseq = subset_samples(phy.genus,ind)
+pseq.rel = microbiome::transform(pseq, "compositional")
+otu = abundances(pseq.rel)
+meta = meta(pseq.rel)
+dim(otu) # 37 68; 37 kinds of microbiome, 68 subjects
+dim(meta) # 68, 53; 68 subjects and 53 features
+```
+
+
+#### 2. Visualize the population density and highlight sample groups 
+
+```{R echo = FALSE, fig.height = 3, fig.width = 5, fig.align = "center"}
+library(png)
+library(grid)
+img <- readPNG("/Users/yaolanqiu/Desktop/NYU/rotation/Rotation1/result 0415/2.png")
+grid.raster(img)
+```
+
+#### 3. PERMANOVA significance test for group-level differences
+
+```{R}
+permanova <- adonis(t(otu) ~ Treatment,
+                    data = meta, permutations=99, method = "bray")
+permanova 
+```
+
+
+#### 4. Checking the homogeneity condition
+
+
+```{R}
+dist = vegdist(t(otu))
+anova(betadisper(dist, meta$Treatment))
+```
+
+
+#### 5. Show coefficients for the top taxa separating the groups
+
+```{R echo =FALSE, fig.height = 3, fig.width = 3, fig.align = "center"}
+library(png)
+library(grid)
+img <- readPNG("/Users/yaolanqiu/Desktop/NYU/rotation/Rotation1/result 0415/1.png")
+grid.raster(img)
+```
+
+
+```{R include = FALSE}
+
+# 2.2 Let's try the methods:
+setwd('/Users/yaolanqiu/Desktop/NYU/rotation/Rotation1/result 1115 codes')
+source('admm.R')
+source('ama.R')
+
+library(fossil)
+library(cvxbiclustr)
+library(cvxclustr)
+
+```
+
+
+```{R include = FALSE}
+coef = coefficients(permanova)["Treatment1",]
+top.coef = coef[rev(order(abs(coef)))[1:20]]
+
+rownames(otu)[rev(order(abs(coef)))[1:10]] = '1'
+rownames(otu)[rownames(otu)!=1] = '2'
+colnames(otu) = meta$Treatment
+
+X = as.matrix(otu)
+
+col_types = colnames(X)
+row_types = rownames(X)
+col_ty = as.numeric(factor(col_types))
+row_ty = as.numeric(factor(row_types))
+
+cols <- rainbow(4)
+YlGnBu5 <- c('#ffffd9','#c7e9b4','#41b6c4','#225ea8','#081d58')
+hmcols <- colorRampPalette(YlGnBu5)(256)
+
+phi = 0.5; k = 5
+wts <- gkn_weights(X,phi=phi,k_row=k,k_col=k)
+w_row <- wts$w_row
+w_col <- wts$w_col
+E_row <- wts$E_row
+E_col <- wts$E_col
+
+#### Initialize path parameters and structures
+nGamma <- 7
+gammaSeq <- 10**seq(0,1,length.out=nGamma)
+
+## Generate solution path
+sol <- cobra_validate(X,E_row,E_col,w_row,w_col,gammaSeq,fraction=0.01)
+
+## Plot validation error
+verr <- sol$validation_error
+#plot(verr)
+
+## Heatmap of data smoothed at the model selected to minimize validation error
+ix <- which.min(verr)
+groups_row <- sol$groups_row[[ix]]
+groups_col <- sol$groups_col[[ix]]
+M <- biclust_smooth(X,groups_row,groups_col)
+```
+
+
+```{R echo = FALSE}
+heatmap.2(X, trace='none',
+          ColSideCol=cols[col_ty],
+          RowSideColors = cols[row_ty],col=hmcols,
+          main = 'raw data')
+```
+
+```{R echo = FALSE}
+heatmap.2(sol$U[[ix]], trace='none',
+          ColSideCol=cols[col_ty],
+          RowSideColors = cols[row_ty],col=hmcols,
+          main = 'eric')
+```
+
+```{R echo = FALSE}
+heatmap.2(M, trace='none',
+          ColSideCol=cols[col_ty],
+          RowSideColors = cols[row_ty],col=hmcols,
+          main = 'eric smooth')
+```
+
+```{R include = FALSE}
+dat = X
+## 2.2.2 ADMM
+nu1 = nu2 = 0.5
+gamma_1 = gamma_2 = 7; k_row = k_col = 5
+
+res_admm1 = bi_ADMM_order(as.matrix(dat), nu1, nu2, gamma_1, gamma_2,
+                          kk=5, phi=0.5,niter = 1000,
+                          tol = 0.001,output = 1)
+MM = cluster_assign(as.matrix(dat), result = res_admm1, method = 'ADMM')
+
+```
+
+
+```{R echo = FALSE}
+heatmap.2(res_admm1$A, trace='none',
+          ColSideCol=cols[col_ty],
+          RowSideColors = cols[row_ty],col=hmcols,
+          main = 'ADMM')
+```
+
+```{R echo = FALSE}
+heatmap.2(MM$M, trace='none',
+          ColSideCol=cols[col_ty],
+          RowSideColors = cols[row_ty],col=hmcols,
+          main = 'ADMM smooth')
+```
+
