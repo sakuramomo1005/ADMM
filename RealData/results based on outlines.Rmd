@@ -1,0 +1,535 @@
+---
+title: "Results based on the outlines"
+date: February, 2019
+output: 
+  pdf_document:
+    toc: true
+    number_sections: 5
+documentclass: article
+---
+
+
+## 1. Load data
+
+The *'mice.data.20181031.RData'* dataset contains 37 kinds of microbiomes and different numbers of subjects in control group and PAT group at week 3, 6, 10 ,13.
+
+Here is the number of subjects in different groups at different time.
+
+```{R include = FALSE}
+set.seed(123)
+# load data
+setwd('/Users/yaolanqiu/Desktop/NYU/rotation/Rotation1/Generate_microbiome_compositional_data')
+pac = c("survival","plyr","ggplot2","reshape2","phyloseq",'dirmult','gtools')
+.tmp = lapply(pac, library, character.only = T)
+load(file = 'mice.data.20181031.RData') 
+
+#nsample = 499; 499 mice
+# ntaxa = 37; bacterial taxonomy
+map = sample_data(phy.genus)
+rawdata = otu_table(phy.genus)
+
+#covariates of interest:
+# 1. Treatment: STAT; Control; PAT
+# 2. Sex: F;M
+# 3. Week: 3;6;10;13
+# 4. Diabetes: 1; 0; NA
+ind1 = map$Week==3 &  map$Treatment =='Control'
+ind2 = map$Week==6 &  map$Treatment =='Control'
+ind3 = map$Week==10 &  map$Treatment =='Control'
+ind4 = map$Week==13 &  map$Treatment =='Control'
+
+ind5 = map$Week==3 &  map$Treatment =='PAT'
+ind6 = map$Week==6 &  map$Treatment =='PAT'
+ind7 = map$Week==10 &  map$Treatment =='PAT'
+ind8 = map$Week==13 &  map$Treatment =='PAT'
+
+phy.sub1 = subset_samples(phy.genus,ind1)
+phy.sub2 = subset_samples(phy.genus,ind2)
+phy.sub3 = subset_samples(phy.genus,ind3)
+phy.sub4 = subset_samples(phy.genus,ind4)
+phy.sub5 = subset_samples(phy.genus,ind5)
+phy.sub6 = subset_samples(phy.genus,ind6)
+phy.sub7 = subset_samples(phy.genus,ind7)
+phy.sub8 = subset_samples(phy.genus,ind8)
+
+dat1 = otu_table(phy.sub1)
+dat2 = otu_table(phy.sub2)
+dat3 = otu_table(phy.sub3)
+dat4 = otu_table(phy.sub4)
+dat5 = otu_table(phy.sub5)
+dat6 = otu_table(phy.sub6)
+dat7 = otu_table(phy.sub7)
+dat8 = otu_table(phy.sub8)
+
+
+a = c(dim(dat1)[2],dim(dat2)[2],dim(dat3)[2],dim(dat4)[2])
+b = c(dim(dat5)[2],dim(dat6)[2],dim(dat7)[2],dim(dat8)[2])
+dms = data.frame(rbind(a,b))
+rownames(dms) = c('Control','PAT')
+colnames(dms) = c('Week 3','Week 6','Week 10','Week 13')
+library(knitr)
+```
+
+```{R echo =FALSE}
+kable(dms)
+```
+
+Here is the number of 0s in the counts for different groups at different time.
+```{R echo =FALSE}
+a = c(sum(dat1 == 0), sum(dat2 == 0),sum(dat3 == 0),sum(dat4 == 0))
+b = c(sum(dat5 == 0), sum(dat6 == 0),sum(dat7 == 0),sum(dat8 == 0))
+mis = data.frame(rbind(a,b))
+rownames(mis) = c('Control','PAT')
+colnames(mis) = c('Week 3','Week 6','Week 10','Week 13')
+kable(mis)
+```
+
+```{R include =FALSE}
+ind4 = map$Week==13 &  map$Treatment =='Control'
+ind8 = map$Week==13 &  map$Treatment =='PAT'
+phy.sub4 = subset_samples(phy.genus,ind4)
+phy.sub8 = subset_samples(phy.genus,ind8)
+
+con = otu_table(phy.sub4)
+con = data.frame(con)
+
+pat = otu_table(phy.sub8)
+pat = data.frame(pat)
+dim(pat);dim(con)
+
+dat = cbind(pat, con)
+# change the group names
+colnames(dat) = rep(c('pat','con'),times = c(dim(pat)[2],dim(con)[2]))
+# remove the rows and columns with all 0s.
+dat = dat[-which(apply(dat,1,sum) == 0),]
+dim(dat) # 36 68
+
+```
+
+Since too many 0s may affect the results. I would like to use the subset at week 13. 
+
+*I feel weird here. Why there are more non-zeros at the end of the trial?*
+
+## 2. Pure real data (without any change on the real data)
+
+#### 2.1 Whether the control group and the PAT group are different?
+
+```{R echo = FALSE}
+
+micro = rep(rownames(dat),dim(dat)[2]) 
+value = unlist(dat)
+group = rep(c('pat','con'),
+            times = c(sum(colnames(dat) =='pat') * dim(dat)[1],
+            sum(colnames(dat) =='con') * dim(dat)[1]))
+            
+diff1 = data.frame(group = group, micro = micro, value = value)
+```
+
+Here we can see, the groups ('control','PAT') do not have significant differences.
+
+```{R echo = FALSE}
+summary(aov(value ~ group, data = diff1))
+```
+
+When adjusted with group, the microbiomes have significant differences in counts. This makes sense since we observed big differences.
+
+```{R echo =FALSE}
+summary(aov(value ~ micro + group, data = diff1))
+```
+
+To show it more clear, we can draw a heatmap: 
+
+```{R echo =FALSE}
+col_types = colnames(dat)
+col_ty = as.numeric(factor(col_types))
+cols <- rainbow(4)
+YlGnBu5 <- c('#ffffd9','#c7e9b4','#41b6c4','#225ea8','#081d58')
+hmcols <- colorRampPalette(YlGnBu5)(256)
+heatmap(as.matrix(dat),col=hmcols,labCol = NA,
+        ColSideCol=cols[col_ty],
+        main = 'Fig 1: Raw data (control & PAT)')
+```
+
+
+#### 2.2 Test whether the clustering method can separate those two groups
+
+Let's then try the biclustering methods:
+
+##### 2.1.1 Eric's method
+
+```{R include =FALSE}
+dat = dat/ matrix(apply(dat,2,sum),dim(dat)[1],dim(dat)[2],byrow =TRUE)
+apply(dat,2,sum)
+
+# 2.2 Let's try the methods:
+setwd('/Users/yaolanqiu/Desktop/NYU/rotation/Rotation1/result 1115 codes')
+source('admm.R')
+source('ama.R')
+
+library(fossil)
+library(cvxbiclustr)
+library(cvxclustr)
+
+## 2.2.1. Eric's method
+X = as.matrix(dat)
+phi = 0.5; k = 5
+wts <- gkn_weights(X,phi=phi,k_row=k,k_col=k)
+w_row <- wts$w_row
+w_col <- wts$w_col
+E_row <- wts$E_row
+E_col <- wts$E_col
+
+#### Initialize path parameters and structures
+nGamma <- 7
+gammaSeq <- 10**seq(0,1,length.out=nGamma)
+
+## Generate solution path
+sol <- cobra_validate(X,E_row,E_col,w_row,w_col,gammaSeq,fraction=0.01)
+
+## Plot validation error
+verr <- sol$validation_error
+#plot(verr)
+
+## Heatmap of data smoothed at the model selected to minimize validation error
+ix <- which.min(verr)
+groups_row <- sol$groups_row[[ix]]
+groups_col <- sol$groups_col[[ix]]
+M <- biclust_smooth(X,groups_row,groups_col)
+```
+
+```{R echo = FALSE}
+heatmap(sol$U[[ix]],col=hmcols,labCol=NA,
+        ColSideCol=cols[col_ty],
+        main = 'Fig2: Eric no smooth for raw data')
+```
+
+```{R echo =FALSE}
+heatmap(M,col=hmcols,labCol=NA,
+        ColSideCol=cols[col_ty],
+        main = 'Fig3: Eric with smooth for raw data')
+```
+
+
+##### 2.1.2 Our ADMM
+```{R include =FALSE}
+nu1 = nu2 = 2
+gamma_1 = gamma_2 = 5;k_row = k_col = 5
+
+res_admm1 = bi_ADMM_order(as.matrix(dat), nu1, nu2, gamma_1, gamma_2,
+                          kk=5, phi=0.5,niter = 1000,
+                          tol = 0.001,output = 1)
+MM = cluster_assign(as.matrix(dat), result = res_admm1, method = 'ADMM')
+```
+
+```{R echo =FALSE}
+heatmap(res_admm1$A,col=hmcols,labCol=NA,
+        ColSideCol=cols[col_ty],
+        main = 'Fig4: ADMM no smooth for raw data')
+```
+
+```{R echo = FALSE}
+heatmap(MM$M,col=hmcols,labCol=NA,
+        ColSideCol=cols[col_ty],
+        main = 'Fig5: ADMM with smooth for raw data')
+```
+
+
+
+## 3. Semi real data on the subjects. 
+
+Select one group, e.g. the control group. 
+
+First, test whether the distributions of microbiomes are different within the group. If not, select half of the subjects as group 1 and the rest as group 2. Increase or decrease some microbiome values in group 1. Then apply our convex bi-clustering method to test wether we can separate group 1 and group 2.
+
+#### 3.1 comparision of the microbiome counts for subjects within the control group
+
+```{R include =FALSE}
+which(apply(con,1,sum) == 0)
+dim(con)
+con[-which(apply(con,1,sum) == 0),]
+dim(con[-which(apply(con,1,sum) == 0),])
+con = con[-which(apply(con,1,sum) == 0),]
+g1 = 1:round(dim(con)[2]/2)
+g2 = (round(dim(con)[2]/2)+1): dim(con)[2]
+colnames(con) = rep(c('g1','g2'),times = c(length(g1),length(g2)))
+dat = con
+
+# pairwise comparison 
+paov = c(); pt = c()
+n1 = c(); n2 = c()
+for(i in 1:(dim(dat)[2]-1)){
+  for(j in (i+1):dim(dat)[2]){
+    value = c(dat[,i],dat[,j])
+    group = c(rep(1,length(dat[,i])),rep(2,length(dat[,j])))
+    test = aov(value~group)
+    paov = c(paov, summary(test)[[1]]$`Pr(>F)`[1])
+    pt = c(pt, t.test(dat[,i],dat[,j])$p.value)
+    n1 = c(n1, i); n2 = c(n2, j)
+  }
+}
+#pair_compare = data.frame(subj1 = n1, subj2 = n2, pvalue = p)
+#head(pair_compare)
+#min(pair_compare$pvalue)
+min(paov)
+```
+
+The smallest p value in those comparision is:
+```{R echo =FALSE}
+min(paov)
+```
+which is larger than 0.05, that is, there is no significant differences between two subjects.
+
+#### 3.2 Assign values to part of the counts
+
+```{R include =FALSE}
+# Sort the columns of the dataset.
+which(apply(con,2,sum) == max(apply(con,2,sum)))
+dat2 = con[order(con[,1],con[,2],con[,3],con[,4],con[,5],con[,6],
+                 con[,7],con[,8],con[,9],con[,10],con[,11],con[,12],
+                 con[,13],con[,14],con[,15],con[,16],con[,17],con[,18]),]
+
+col_types = colnames(dat2)
+col_ty = as.numeric(factor(col_types))
+
+dim(dat2)
+dat2_temp = dat2
+```
+
+```{R}
+dim(dat2_temp)
+dat2_temp[18:34,1:18] = dat2_temp[18:34,1:18] * 50
+```
+
+* the data were sorted before the mutiplication
+
+```{R echo =FALSE}
+#dat2_temp[18:34,19:36] = dat2_temp[1:17,19:36] * 10000
+dat2_temp = as.matrix(dat2_temp)
+rownames(dat2_temp)[1:17] = c('1')
+rownames(dat2_temp)[18:34] = c('2')
+row_types = rownames(dat2_temp)
+row_ty = as.numeric(factor(row_types))
+
+# check
+#order(apply(dat2_temp,1,sum))
+
+```
+
+The heatmaps:
+
+* Fig 6 is the heatmap for the raw control group data
+
+* Fig 7 is the heatmap for the control group after mutiplying some arbitrary value.
+
+```{R echo = FALSE}
+heatmap(as.matrix(dat2),col=hmcols,labCol = NA,labRow = NA,
+        ColSideCol=cols[col_ty],
+        main = 'Fig6: Raw data (control)')
+
+heatmap(as.matrix(dat2_temp),col=hmcols,labRow = NA,
+        ColSideCol=cols[col_ty],RowSideCol=cols[row_ty],
+        main = 'Fig7: Semi-raw data1 (control)')
+```
+
+
+#### 3.2 Test whether the clustering method can separate those two groups
+
+##### 3.2.1 Eric's method
+
+```{R include =FALSE}
+dat2_temp = dat2_temp/ matrix(apply(dat2_temp,2,sum),dim(dat2_temp)[1],
+                              dim(dat2_temp)[2],byrow =TRUE)
+apply(dat2_temp,2,sum)
+X = as.matrix(dat2_temp)
+phi = 0.5; k = 5
+wts <- gkn_weights(X,phi=phi,k_row=k,k_col=k)
+w_row <- wts$w_row
+w_col <- wts$w_col
+E_row <- wts$E_row
+E_col <- wts$E_col
+
+#### Initialize path parameters and structures
+nGamma <- 7
+gammaSeq <- 10**seq(0,1,length.out=nGamma)
+
+## Generate solution path
+sol <- cobra_validate(X,E_row,E_col,w_row,w_col,gammaSeq,fraction=0.01)
+
+## Plot validation error
+verr <- sol$validation_error
+#plot(verr)
+
+## Heatmap of data smoothed at the model selected to minimize validation error
+ix <- which.min(verr)
+groups_row <- sol$groups_row[[ix]]
+groups_col <- sol$groups_col[[ix]]
+M <- biclust_smooth(X,groups_row,groups_col)
+```
+
+```{R echo =FALSE}
+heatmap(sol$U[[ix]],col=hmcols,
+        ColSideCol=cols[col_ty],RowSideCol=cols[row_ty],
+        main = 'Fig8: Eric no smooth for data2')
+```
+
+```{R echo =FALSE}
+heatmap(M,col=hmcols,
+        ColSideCol=cols[col_ty],RowSideCol=cols[row_ty],
+        main = 'Fig9: Eric with smooth for data2')
+```
+
+##### 3.2.2 Our ADMM
+
+nu1 = nu2 =2
+gamma_1 = gamma_2 = 0.5
+
+```{R include =FALSE}
+nu1 = nu2 =2
+gamma_1 = gamma_2 = 0.5;k_row = k_col = 5
+res_admm1 = bi_ADMM_order(as.matrix(dat2_temp), nu1, nu2, gamma_1, gamma_2,
+                          kk=5, phi=0.5,niter = 2000,
+                          tol = 0.00001,output = 1)
+MM = cluster_assign(as.matrix(dat2_temp), result = res_admm1, method = 'ADMM')
+```
+
+```{R echo =FALSE}
+heatmap(res_admm1$A,col=hmcols,
+        ColSideCol=cols[col_ty],RowSideCol=cols[row_ty],
+        main = 'Fig10: ADMM no smooth for data 2')
+```
+
+```{R echo =FALSE}
+heatmap(MM$M,col=hmcols,
+        ColSideCol=cols[col_ty],RowSideCol=cols[row_ty],
+        main = 'Fig11: ADMM with smooth for data2')
+```
+
+
+## 4. Semi real data on both subjects and microbiomes.
+
+We would like to see whether our method can this help us separate microbiome groups when we have already known the treatment groups.
+
+```{R include =FALSE}
+
+con = otu_table(phy.sub4)
+con = data.frame(con)
+# pat group
+pat = otu_table(phy.sub8)
+pat = data.frame(pat)
+
+dat = cbind(pat, con)
+# change the group names
+colnames(dat) = rep(c('pat','con'),times = c(dim(pat)[2],dim(con)[2]))
+# remove the rows and columns with all 0s.
+dat = dat[-which(apply(dat,1,sum) == 0),]
+dim(dat) # 36 68
+
+dat3 = dat[order(dat[,1],dat[,2],dat[,3],dat[,4],dat[,5],dat[,6],
+                 dat[,7],dat[,8],dat[,9],dat[,10],dat[,11],dat[,12],
+                 dat[,13],dat[,14],dat[,15],dat[,16],dat[,17],dat[,18]),]
+
+dim(dat3)
+dat2_temp = dat3
+dat3_temp = dat3
+dat2_temp[18:34,1:34] = dat2_temp[18:34,1:34] * 50
+```
+
+multiple some value for part of the data
+```{R}
+dim(dat3_temp)
+dat3_temp[18:34,1:34] = dat3_temp[18:34,1:34] * 50
+```
+
+```{R include =FALSE}
+#dat2_temp[18:34,19:36] = dat2_temp[1:17,19:36] * 10000
+dat2_temp = as.matrix(dat2_temp)
+rownames(dat2_temp)[1:18] = c('1')
+rownames(dat2_temp)[19:36] = c('2')
+row_types = rownames(dat2_temp)
+row_ty = as.numeric(factor(row_types))
+col_types = colnames(dat2_temp)
+col_ty = as.numeric(factor(col_types))
+
+# check
+```
+
+The heatmap of the data after multiplication
+
+```{R echo =FALSE}
+#order(apply(dat2_temp,1,sum))
+heatmap(as.matrix(dat2_temp),col=hmcols,
+        ColSideCol=cols[col_ty],RowSideCol=cols[row_ty],
+        main = 'Fig12: Semi-raw data (control and PAT)')
+```
+
+#### 4.2 Test whether the clustering method can separate those two groups
+
+##### 4.2.1 Eric's method
+```{R include =FALSE}
+dat2_temp = dat2_temp/ matrix(apply(dat2_temp,2,sum),dim(dat2_temp)[1],
+                              dim(dat2_temp)[2],byrow =TRUE)
+apply(dat2_temp,2,sum)
+X = as.matrix(dat2_temp)
+phi = 0.5; k = 5
+wts <- gkn_weights(X,phi=phi,k_row=k,k_col=k)
+w_row <- wts$w_row
+w_col <- wts$w_col
+E_row <- wts$E_row
+E_col <- wts$E_col
+
+#### Initialize path parameters and structures
+nGamma <- 7
+gammaSeq <- 10**seq(0,1,length.out=nGamma)
+
+## Generate solution path
+sol <- cobra_validate(X,E_row,E_col,w_row,w_col,gammaSeq,fraction=0.01)
+
+## Plot validation error
+verr <- sol$validation_error
+#plot(verr)
+
+## Heatmap of data smoothed at the model selected to minimize validation error
+ix <- which.min(verr)
+groups_row <- sol$groups_row[[ix]]
+groups_col <- sol$groups_col[[ix]]
+M <- biclust_smooth(X,groups_row,groups_col)
+
+```
+
+
+```{R echo =FALSE}
+heatmap(sol$U[[ix]],col=hmcols,
+        ColSideCol=cols[col_ty],RowSideCol=cols[row_ty],
+        main = 'Fig13: Eric no smooth for data2')
+```
+
+```{R echo =FALSE}
+heatmap(M,col=hmcols,
+        ColSideCol=cols[col_ty],RowSideCol=cols[row_ty],
+        main = 'Fig14: Eric with smooth for data2')
+```
+
+##### 4.2.2 ADMM
+
+```{R include = FALSE}
+set.seed(1234)
+nu1 = nu2 =2
+gamma_1 = gamma_2 = 5;k_row = k_col = 5
+res_admm1 = bi_ADMM_order(as.matrix(dat2_temp), nu1, nu2, gamma_1, gamma_2,
+                          kk=5, phi=0.5,niter = 2000,
+                          tol = 0.00001,output = 1)
+MM = cluster_assign(as.matrix(dat2_temp), result = res_admm1, method = 'ADMM')
+
+```
+
+```{R echo =FALSE}
+heatmap(res_admm1$A,col=hmcols,
+        ColSideCol=cols[col_ty],RowSideCol=cols[row_ty],
+        main = 'Fig15: ADMM no smooth for data 2')
+```
+
+```{R echo =FALSE}
+heatmap(MM$M,col=hmcols,
+        ColSideCol=cols[col_ty],RowSideCol=cols[row_ty],
+        main = 'Fig16: ADMM with smooth for data2')
+```
