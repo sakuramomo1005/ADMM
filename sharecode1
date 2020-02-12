@@ -149,16 +149,16 @@ for (ii in 1:rep.num ){
   # count time
   t0 <- Sys.time()
   
-
+  
   # generate a validation data given the same clustering stucture
   # val.X <- data_gen(seed.cluster=ii* 2365,seed.data=ii* 1257,n , p , theta,row_group = 4, col_group = 4) 
-
-  X <- data_gen(seed.cluster=ii* 112365,seed.data=ii* 112365,n , p , theta,row_group = 4, col_group = 4) 
+  
+  X <- data_gen(seed.cluster=ii* 3651,seed.data=ii* 1651,n , p , theta,row_group = 4, col_group = 4) 
   X <- X - mean(X)
   X <- X/norm(X,'f')
   
   # generate a validation data given the same clustering stucture
-  val.X <- data_gen(seed.cluster=ii* 112365,seed.data=ii* 111257,n , p , theta,row_group = 4, col_group = 4) 
+  val.X <- data_gen(seed.cluster=ii* 3651,seed.data=ii* 1571,n , p , theta,row_group = 4, col_group = 4) 
   val.X <- val.X - mean(val.X)
   val.X <- val.X/norm(val.X,'f')
   
@@ -220,7 +220,7 @@ for (ii in 1:rep.num ){
                      # admm.validate.rand.list=admm.validate.rand.list,
                      admm.validate.adj.rand.list=admm.validate.adj.rand.list)
   
-  names = paste('temp_mainresult_sim_20200204',
+  names = paste('temp_mainresult_sim_20200205',
                 '_n_', n, '_p_', p,
                 '_row_group_', row_group,
                 '_col_group_', col_group, '_theta_', theta, '.RData', sep='')
@@ -264,7 +264,7 @@ for (ii in 1:rep.num ){
     # admm.rand = c(admm.rand, rand.index(admm.X.groups$num, X.groups$num))
     admm.adj.rand = c(admm.adj.rand, adjustedRandIndex(admm.X.groups$num, X.groups$num))
     admm.validate = predict_bi_validate(admm.dat,admm_group_row$cluster,
-                                          admm_group_col$cluster, val.X, val.X.groups$num)
+                                        admm_group_col$cluster, val.X, val.X.groups$num)
     # admm.validate.rand = c(admm.validate.rand, admm.validate$rand)
     admm.validate.adj.rand = c(admm.validate.adj.rand, admm.validate$adj.rand)
     
@@ -285,7 +285,7 @@ for (ii in 1:rep.num ){
                        # admm.validate.rand.list=admm.validate.rand.list,
                        admm.validate.adj.rand.list=admm.validate.adj.rand.list)
     
-    names = paste('temp_mainresult_sim_20200204',
+    names = paste('temp_mainresult_sim_20200205',
                   '_n_', n, '_p_', p,
                   '_row_group_', row_group,
                   '_col_group_', col_group, '_theta_', theta, '.RData', sep='')
@@ -358,7 +358,7 @@ for (ii in 1:rep.num ){
                      # admm.validate.rand.list=admm.validate.rand.list,
                      admm.validate.adj.rand.list=admm.validate.adj.rand.list)
   
-  names = paste('mainresult_sim_20200204',
+  names = paste('mainresult_sim_20200208',
                 '_n_', n, '_p_', p,
                 '_row_group_', row_group,
                 '_col_group_', col_group, '_theta_', theta, '.RData', sep='')
@@ -375,7 +375,7 @@ main.result = list(times=times,nGamma = nGamma,
                    # admm.validate.rand.list=admm.validate.rand.list,
                    admm.validate.adj.rand.list=admm.validate.adj.rand.list)
 
-names = paste('mainresult_sim_20200204',
+names = paste('mainresult_sim_20200208',
               '_n_', n, '_p_', p, 
               '_row_group_', row_group, 
               '_col_group_', col_group, '_theta_', theta, '.RData', sep='')
